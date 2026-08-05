@@ -1,0 +1,47 @@
+{
+  "name": "ytd",
+  "productName": "YouTube Desktop",
+  "version": "1.0.0",
+  "description": "YouTube desktop app with a persistent Google session (passkey capable) that is fenced off from every non-YouTube Google service.",
+  "main": "src/main/index.js",
+  "license": "MIT",
+  "author": "YTD",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke-test",
+    "probe": "electron . --login-probe",
+    "signout": "electron . --reset-session",
+    "icon": "node tools/make-icon.js",
+    "test": "node --test \"test/*.test.js\"",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.ytd.youtube",
+    "productName": "YouTube Desktop",
+    "files": [
+      "src/**/*",
+      "build/icon.ico",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "koffi": "^3.1.4"
+  }
+}
