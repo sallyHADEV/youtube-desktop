@@ -10,6 +10,7 @@ const { buildMenu, HOME_URL } = require('./menu');
 const { createLogger, safeUrl } = require('./logger');
 const { applyDarkTitleBar } = require('./windows-titlebar');
 const { resolveGesture, THRESHOLD_PX } = require('./gesture');
+const { nextAngle, transformFor } = require('./rotation');
 const windowState = require('./window-state');
 
 const SMOKE_TEST = process.argv.includes('--smoke-test');
@@ -63,6 +64,15 @@ function start() {
   // Popups get the dark title bar too; doing it here covers every window without
   // each creation site having to remember.
   app.on('browser-window-created', (_event, win) => paintTitleBar(win));
+
+  // Rotation geometry for the `R` key. It lives here because a sandboxed preload
+  // cannot require application files, and this keeps one tested implementation
+  // rather than a copy in the preload that drifts.
+  ipcMain.handle('ytd:rotate', (_event, request) => {
+    const current = Number(request?.current) || 0;
+    const angle = request?.advance === true ? nextAngle(current) : current;
+    return { angle, transform: transformFor(angle, request?.box, request?.container) };
+  });
 
   // Right-drag gestures. The renderer reports the drag; the meaning is decided
   // here, where the page cannot influence it.

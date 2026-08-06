@@ -13,7 +13,7 @@ Watching YouTube in a browser tab means the rest of Google is one click away, sh
 - Passkey (Windows Hello) sign-in
 - Session survives restarts — sign in once
 - Dark window, title bar included
-- Mouse gestures for back / forward / close
+- Mouse gestures for back / forward / close, and `R` to rotate a video
 
 ## Install
 
@@ -21,8 +21,8 @@ Grab one of the two files from `dist`:
 
 | File | What it is |
 | --- | --- |
-| `YouTube Desktop Setup 1.0.0.exe` | Installer. Adds Start menu and desktop shortcuts |
-| `YouTube Desktop 1.0.0.exe` | Portable. Just double-click it |
+| `YouTube Desktop Setup 1.1.0.exe` | Installer. Adds Start menu and desktop shortcuts |
+| `YouTube Desktop 1.1.0.exe` | Portable. Just double-click it |
 
 The builds are unsigned, so Windows SmartScreen will warn on first run. Choose **More info → Run anyway**.
 
@@ -53,6 +53,12 @@ A drag has to travel at least 60 pixels. Straight gestures are ignored if they m
 The L gesture closes **the window it was drawn in**. Draw it in a popup and only the popup closes; draw it in the main window and the app quits.
 
 `Alt+←` / `Alt+→` and the **탐색 (Navigate)** menu do the same thing.
+
+## Rotating a video
+
+Press **`R`** to turn the video a quarter turn clockwise. Four presses bring it back upright. Useful for phone footage that was uploaded sideways.
+
+Only the video rotates — the player controls and the page stay where they are — and it is scaled to stay inside the player. The rotation resets when a different video starts, and `R` is ignored while you are typing in the search box.
 
 ## What is blocked
 

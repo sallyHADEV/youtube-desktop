@@ -146,6 +146,126 @@ if (patch) {
   });
 }
 
+// ------------------------------------------------------------ user input ---
+
+/**
+ * Only real input counts. A page can call
+ * `dispatchEvent(new MouseEvent('mousedown', { button: 2 }))` and forge an entire
+ * gesture — and since this preload is injected into every frame, an ad iframe
+ * could do it too. `isTrusted` is false for anything script-generated.
+ */
+const isRealInput = (event) => event.isTrusted === true;
+
+// ------------------------------------------------------- video rotation ---
+
+/**
+ * `R` turns the video a quarter turn. Phone footage uploaded sideways is the
+ * reason this exists.
+ *
+ * The transform is applied to the `<video>` element only, so the player controls
+ * and the rest of the page stay upright.
+ *
+ * The geometry lives in the main process (`rotation.js`) and is fetched over
+ * IPC. A sandboxed preload **cannot `require` application files** — only
+ * `electron` and a handful of built-ins — and attempting it throws, taking every
+ * listener registered further down this file with it. Duplicating the maths here
+ * would work but would then drift away from the tested copy.
+ */
+let rotationAngle = 0;
+/** @type {HTMLVideoElement | null} */
+let rotatedVideo = null;
+
+function findVideo() {
+  return (
+    document.querySelector('video.html5-main-video') ??
+    document.querySelector('#movie_player video') ??
+    document.querySelector('video')
+  );
+}
+
+/**
+ * Layout sizes, never `getBoundingClientRect()`.
+ *
+ * A bounding rect reflects the transform that is already applied, so measuring
+ * an element that is currently rotated returns the rotated, scaled box. Feeding
+ * that back in — which happens on every resize while rotated — compounds the
+ * scaling until the video shrinks away. `offsetWidth` and `clientWidth` are
+ * layout values and ignore transforms.
+ */
+function measure(video) {
+  const player = video.closest('#movie_player') ?? video.parentElement ?? video;
+  return {
+    box: { width: video.offsetWidth, height: video.offsetHeight },
+    container: { width: player.clientWidth, height: player.clientHeight },
+  };
+}
+
+/**
+ * Applied as a stylesheet rule rather than an inline style. YouTube rewrites the
+ * video element's `style` attribute as the player resizes, and swaps the element
+ * itself out on navigation — either would drop an inline transform, while a rule
+ * keeps applying.
+ */
+function rotationStyleElement() {
+  let style = document.getElementById('ytd-rotation-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'ytd-rotation-style';
+    (document.head ?? document.documentElement).appendChild(style);
+  }
+  return style;
+}
+
+async function applyRotation(advance) {
+  const video = findVideo();
+  if (!video) return;
+
+  // A new video means a fresh start; carrying a rotation into the next
+  // autoplayed clip would be baffling.
+  if (rotatedVideo && video !== rotatedVideo) rotationAngle = 0;
+  rotatedVideo = video;
+
+  const { box, container } = measure(video);
+  const result = await ipcRenderer.invoke('ytd:rotate', {
+    current: rotationAngle,
+    advance: advance === true,
+    box,
+    container,
+  });
+
+  rotationAngle = result.angle;
+  rotationStyleElement().textContent = result.transform
+    ? `video.html5-main-video, #movie_player video { transform: ${result.transform}; transform-origin: center center; }`
+    : '';
+}
+
+/** Typing in the search box must stay typing. */
+function isTypingTarget(target) {
+  if (!target || typeof target.tagName !== 'string') return false;
+  if (target.isContentEditable) return true;
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+addEventListener(
+  'keydown',
+  (event) => {
+    if (!isRealInput(event) || event.key !== 'r' || isTypingTarget(event.target)) return;
+    // Ctrl+R is reload, and Alt/Meta combinations belong to the OS or the page.
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!findVideo()) return; // nothing to rotate; leave the key to the page
+
+    event.preventDefault();
+    event.stopPropagation();
+    applyRotation(true);
+  },
+  true,
+);
+
+// The player resizes on window changes, theatre mode and fullscreen; the scale
+// has to be recomputed or the video stops fitting.
+addEventListener('resize', () => rotationAngle && applyRotation(false));
+addEventListener('fullscreenchange', () => rotationAngle && applyRotation(false));
+
 // --------------------------------------------------------- mouse gestures ---
 
 /**
@@ -177,14 +297,6 @@ let swallowContextMenu = false;
  * during a right-button drag, so there is nothing for viewport coords to lose.
  */
 const originOf = (event) => ({ x: event.clientX, y: event.clientY });
-
-/**
- * Only real input counts. A page can call
- * `dispatchEvent(new MouseEvent('mousedown', { button: 2 }))` and forge an entire
- * gesture — and since this preload is injected into every frame, an ad iframe
- * could do it too. `isTrusted` is false for anything script-generated.
- */
-const isRealInput = (event) => event.isTrusted === true;
 
 addEventListener(
   'mousedown',

@@ -30,6 +30,7 @@ src/main/session.js           Persistent partition, header rewriting, permission
 src/main/navigation-guard.js  Three-layer blocking + external link handoff
 src/main/windows-titlebar.js  DWM title bar colour (koffi FFI)
 src/main/gesture.js           Mouse gesture recognition (pure)
+src/main/rotation.js          Video rotation geometry (pure)
 src/main/window-state.js      Window position and size
 src/main/menu.js              Menu (navigate, sign in, sign out)
 src/main/logger.js            Navigation, blocking and server responses
@@ -212,7 +213,33 @@ The smoke test injects real drags with `sendInputEvent` and checks the history i
 - **Do not judge by URL.** YouTube redirects several paths back to `/`, so two different destinations can share one address and a successful navigation looks like nothing happened. Use `navigationHistory.getActiveIndex()`.
 - **Injected input only reaches a window that is on screen.** The otherwise headless run shows the window briefly for this check.
 
-## 5. Icon
+## 5. Video rotation
+
+`R` turns the video a quarter turn. The geometry lives in [`rotation.js`](src/main/rotation.js); the preload measures and applies.
+
+Rotating 90° swaps the width and height of the box the video occupies, so a landscape video turned on its side overflows the player. `fitScale()` shrinks it to `min(containerW / boxH, containerH / boxW, 1)` — the `1` prevents scaling a video *up* when it would happen to fit.
+
+### ⚠️ A sandboxed preload cannot `require` application files
+
+Only `electron` and a handful of built-ins are available. `require('../main/rotation')` throws, and the exception takes down **every listener registered after it in the file** — the first attempt at this silently disabled the mouse gestures too, with the userAgentData patch above it still working, which is what pointed at the failing line.
+
+So the preload asks the main process over IPC (`ytd:rotate`) instead. Slightly indirect, but there is one tested implementation rather than a copy in the preload that drifts.
+
+### ⚠️ Measure with layout sizes, not `getBoundingClientRect()`
+
+A bounding rect **includes the transform already applied.** Measuring a rotated video returns the rotated, scaled box; feed that back in — which happens on every resize while rotated — and the scaling compounds until the video shrinks away.
+
+`offsetWidth` / `offsetHeight` on the video and `clientWidth` / `clientHeight` on the player are layout values and ignore transforms. (This is why the ImprovedTube extension uses `clientWidth` for the same feature.)
+
+### Applied as a stylesheet rule
+
+The transform goes into a `<style>` element, not `video.style.transform`. YouTube rewrites the video element's `style` attribute as the player resizes and replaces the element itself on navigation — either drops an inline transform, while a rule keeps applying.
+
+### Verification
+
+The smoke test injects a `<video>`, sends real `R` key presses, and checks the rule at 90°, 270° and back to none. It then resizes the player mid-rotation and asserts the scale is recomputed from the new dimensions — the check that fails if bounding rects creep back in.
+
+## 6. Icon
 
 [`tools/make-icon.js`](tools/make-icon.js) generates it with no image tooling: pixels are computed directly, encoded as PNG with `node:zlib`, and assembled into an ICO (which since Vista may hold PNG frames, so no BMP or AND mask is needed).
 
@@ -225,7 +252,7 @@ A red rounded square with a white play triangle. The YouTube logo is a trademark
 
 To change it, edit the `RED` constant and the shape functions, then `npm run icon`.
 
-## 6. Diagnostics
+## 7. Diagnostics
 
 ### Log
 
@@ -251,7 +278,7 @@ npm run probe
 
 Opens the sign-in page in a throwaway session under each of the Chrome / Edge / Firefox / Electron profiles and reports whether it is blocked. No credentials are entered, and passkey requests are disabled in probe windows so no Windows Hello dialog appears.
 
-## 7. Security
+## 8. Security
 
 ### Keep these
 
@@ -300,7 +327,7 @@ Page console messages are recorded up to 300 characters, though, and what a page
 - **The session hand-off exception is broad.** `/accounts/` on any Google host opens in-app with cookies. Narrow `isSessionHandoff` to the hosts actually used in the chain if that matters to you.
 - **`pay.google.com` / `play.google.com` iframes carry the account session.** A deliberate exception for payment flows.
 
-## 8. Packaging
+## 9. Packaging
 
 Specifying `files` patterns makes electron-builder **exclude `node_modules`.** Without listing it, koffi is missing and the title bar fails silently in packaged builds only.
 

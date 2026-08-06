@@ -32,6 +32,7 @@ src/main/windows-titlebar.js  DWM 타이틀바 색 (koffi FFI)
 src/main/window-state.js      창 위치·크기 저장
 src/main/menu.js              메뉴 (탐색, 로그인, 로그아웃)
 src/main/gesture.js           마우스 제스처 판정 (순수 함수)
+src/main/rotation.js          영상 회전 기하 (순수 함수)
 src/main/logger.js            이동 경로·차단·서버 응답 기록
 src/main/smoke-test.js        실행 자가 점검
 src/main/login-probe.js       로그인 차단 진단
@@ -225,7 +226,33 @@ mouseup   button=2 screenX=0 clientX=220
 - **URL로 판정하면 안 됩니다.** YouTube는 여러 경로를 `/`로 되돌리기 때문에 서로 다른 두 목적지가 같은 주소를 가질 수 있고, 그러면 성공한 이동이 아무 일도 없던 것처럼 보입니다. `navigationHistory.getActiveIndex()`로 판정합니다.
 - **주입 입력은 화면에 있는 창에만 전달됩니다.** 헤드리스 실행이라도 이 검사 동안에는 창을 잠깐 띄웁니다.
 
-## 5. 아이콘
+## 5. 영상 회전
+
+`R` 키로 90도씩 돌립니다. 기하 계산은 [`rotation.js`](src/main/rotation.js)에 있고, 프리로드는 측정과 적용만 합니다.
+
+90도로 돌리면 영상이 차지하는 박스의 가로·세로가 바뀌어 플레이어 밖으로 넘칩니다. `fitScale()`이 `min(컨테이너W / 박스H, 컨테이너H / 박스W, 1)`로 줄입니다. 마지막 `1`은 어쩌다 들어맞는 영상을 **확대**하지 않기 위한 것입니다.
+
+### ⚠️ 샌드박스 프리로드는 앱 파일을 `require`할 수 없다
+
+`electron`과 소수의 내장 모듈만 쓸 수 있습니다. `require('../main/rotation')`은 예외를 던지고, **그 뒤에 등록되는 모든 리스너가 통째로 사라집니다.** 처음 시도에서 마우스 제스처까지 조용히 죽었고, 그 위의 userAgentData 패치는 멀쩡히 동작한 덕에 실패 지점을 특정할 수 있었습니다.
+
+그래서 프리로드가 IPC(`ytd:rotate`)로 메인 프로세스에 계산을 요청합니다. 한 단계 우회하지만, 테스트된 구현 하나만 존재하고 프리로드 사본이 따로 놀 일이 없습니다.
+
+### ⚠️ `getBoundingClientRect()` 대신 레이아웃 크기로 측정할 것
+
+바운딩 렉트는 **이미 적용된 transform이 반영된 값**입니다. 회전된 영상을 측정하면 축소된 박스가 나오고, 그 값을 다시 넣으면 — 회전 상태에서 창 크기가 바뀔 때마다 그렇게 됩니다 — 축소가 누적되어 영상이 사라집니다.
+
+영상은 `offsetWidth`/`offsetHeight`, 플레이어는 `clientWidth`/`clientHeight`를 씁니다. 둘 다 레이아웃 값이라 transform의 영향을 받지 않습니다. (ImprovedTube 확장이 같은 기능에서 `clientWidth`를 쓰는 이유이기도 합니다.)
+
+### 스타일 규칙으로 적용
+
+transform은 `video.style.transform`이 아니라 `<style>` 요소에 넣습니다. YouTube는 플레이어 크기가 바뀔 때 video의 `style` 속성을 다시 쓰고, 이동 시에는 요소 자체를 갈아끼웁니다. 어느 쪽이든 인라인 transform은 날아가지만 규칙은 계속 적용됩니다.
+
+### 검증
+
+스모크 테스트가 `<video>`를 넣고 실제 `R` 키를 보내 90도·270도·복귀를 확인합니다. 이어서 회전 상태에서 플레이어 크기를 바꿔 배율이 새 치수로 다시 계산되는지 검사합니다 — 바운딩 렉트가 다시 끼어들면 이 항목이 깨집니다.
+
+## 6. 아이콘
 
 이미지 도구 없이 [`tools/make-icon.js`](tools/make-icon.js)가 생성합니다. 픽셀을 직접 계산해 그리고, Node의 `zlib`만으로 PNG를 인코딩한 뒤 ICO 컨테이너로 조립합니다 (Vista 이후 ICO는 PNG 프레임을 그대로 담을 수 있어 BMP/AND 마스크가 필요 없습니다).
 
@@ -238,7 +265,7 @@ mouseup   button=2 screenX=0 clientX=220
 
 색이나 모양을 바꾸려면 `RED` 상수와 도형 함수를 고친 뒤 `npm run icon`으로 재생성합니다.
 
-## 6. 진단
+## 7. 진단
 
 ### 로그
 
@@ -264,7 +291,7 @@ npm run probe
 
 Chrome / Edge / Firefox / Electron 프로파일별로 임시 세션에서 로그인 페이지를 열어 차단 여부를 판정합니다. 자격 증명은 입력하지 않으며, 진단 창에서는 패스키 요청을 막아 Windows Hello 창이 뜨지 않게 합니다.
 
-## 7. 보안
+## 8. 보안
 
 ### 유지해야 할 것
 
@@ -313,7 +340,7 @@ Chrome / Edge / Firefox / Electron 프로파일별로 임시 세션에서 로그
 - **세션 핸드오프 예외가 넓습니다.** 모든 Google 호스트의 `/accounts/` 경로가 쿠키와 함께 앱 안에서 열립니다. 좁히려면 `isSessionHandoff`를 실제 체인에 쓰이는 호스트로 제한하세요.
 - **`pay.google.com` / `play.google.com` iframe**은 계정 세션을 갖습니다. 결제 기능을 위한 의도적 예외입니다.
 
-## 8. 패키징
+## 9. 패키징
 
 `files`에 패턴을 직접 지정하면 electron-builder가 `node_modules`를 **제외합니다.** 명시하지 않으면 koffi가 빠져 배포본에서만 타이틀바가 조용히 실패합니다.
 

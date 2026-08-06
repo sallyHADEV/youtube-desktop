@@ -198,6 +198,77 @@ async function runSmokeTest({ win, guard, identity }) {
   );
   win.hide();
 
+  // --- video rotation -------------------------------------------------------
+  await navigate(win, HOME_URL);
+  win.showInactive(); // injected key events only reach a window on screen
+  await delay(500);
+
+  // A real player is not needed to prove the wiring: the preload finds whatever
+  // <video> is on the page. Placing our own keeps the check independent of
+  // whichever clips YouTube happens to show today.
+  await win.webContents.executeJavaScript(`(() => {
+    document.querySelectorAll('video').forEach((v) => v.remove());
+    const box = document.createElement('div');
+    box.id = 'movie_player';
+    box.style.cssText = 'position:fixed;top:0;left:0;width:640px;height:360px';
+    const video = document.createElement('video');
+    video.style.cssText = 'width:640px;height:360px';
+    box.appendChild(video);
+    document.body.appendChild(box);
+    return true;
+  })()`);
+
+  // The rotation is a stylesheet rule, not an inline style, so read the computed
+  // value — that is what the user actually sees.
+  const readTransform = () =>
+    win.webContents.executeJavaScript(`(() => {
+      const style = document.getElementById('ytd-rotation-style');
+      return style ? style.textContent : '';
+    })()`);
+
+  await pressKey(win, 'r');
+  const afterOne = await readTransform();
+  record('R 키로 90도 회전', /rotate\(90deg\)/.test(afterOne), afterOne || '(변화 없음)');
+
+  await pressKey(win, 'r');
+  await pressKey(win, 'r');
+  const afterThree = await readTransform();
+  record('세 번 누르면 270도', /rotate\(270deg\)/.test(afterThree), afterThree || '(변화 없음)');
+
+  await pressKey(win, 'r');
+  const afterFour = await readTransform();
+  record('네 번째에 원래대로', afterFour === '', afterFour === '' ? 'transform 비움' : afterFour);
+
+  // Rotating must fit inside the player, not spill out of it.
+  await pressKey(win, 'r');
+  const scaled = await readTransform();
+  const scale = Number(/scale\(([\d.]+)\)/.exec(scaled)?.[1]);
+  record(
+    '회전 후 플레이어 안에 들어옴',
+    scale > 0 && 360 * scale <= 640.5 && 640 * scale <= 360.5,
+    `scale=${scale} → ${Math.round(640 * scale)}x${Math.round(360 * scale)} (플레이어 640x360)`,
+  );
+
+  // Resize the player while rotated. Measuring with a bounding rect here would
+  // read the already-scaled box and shrink the video further on every resize.
+  await win.webContents.executeJavaScript(`(() => {
+    const box = document.getElementById('movie_player');
+    box.style.width = '800px'; box.style.height = '600px';
+    const video = box.querySelector('video');
+    video.style.width = '800px'; video.style.height = '450px';
+    window.dispatchEvent(new Event('resize'));
+    return true;
+  })()`);
+  await delay(600);
+  const resized = await readTransform();
+  const resizedScale = Number(/scale\(([\d.]+)\)/.exec(resized)?.[1]);
+  record(
+    '회전 중 크기 변경에도 배율이 다시 맞음',
+    Math.abs(resizedScale - 600 / 800) < 0.01,
+    `scale=${resizedScale} (기대값 ${(600 / 800).toFixed(3)}, 800x450 영상 / 800x600 플레이어)`,
+  );
+  win.hide();
+
   // --- popups share the session --------------------------------------------
   await navigate(win, HOME_URL);
   const popup = await openPopup(win, HOME_URL);
@@ -299,6 +370,14 @@ async function openPopup(win, url, timeoutMs = 8000) {
   const popup = await opened;
   if (popup && !popup.isDestroyed()) await delay(1500);
   return popup instanceof BrowserWindow ? popup : null;
+}
+
+/** Send a real key press, the kind `isTrusted` accepts. */
+async function pressKey(win, key) {
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: key });
+  win.webContents.sendInputEvent({ type: 'char', keyCode: key });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: key });
+  await delay(400);
 }
 
 /** Draw an L: straight down, then right — the close gesture. */
