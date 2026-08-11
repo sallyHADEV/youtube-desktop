@@ -217,7 +217,19 @@ The smoke test injects real drags with `sendInputEvent` and checks the history i
 
 `R` turns the video a quarter turn. The geometry lives in [`rotation.js`](src/main/rotation.js); the preload measures and applies.
 
-Rotating 90° swaps the width and height of the box the video occupies, so a landscape video turned on its side overflows the player. `fitScale()` shrinks it to `min(containerW / boxH, containerH / boxW, 1)` — the `1` prevents scaling a video *up* when it would happen to fit.
+Rotating 90° swaps the width and height of the box the video occupies. `fitScale()` returns `min(containerW / boxH, containerH / boxW)` — the largest scale that still fits both ways round.
+
+### ⚠️ The scale must be allowed to grow
+
+An earlier version capped it at `1`, reasoning that a video which already fits should not be enlarged. That is wrong for exactly the case this feature exists for: on a **portrait monitor in fullscreen** a 16:9 video is laid out 1080×607, and turned on its side it occupies only 607×1080 of a 1080×1920 screen. Capped, it sits small in the middle of an empty display; uncapped it scales 1.78× and fills the height.
+
+The video element is always laid out to fit the player, so scaling it back up to the container is restoring size, not inventing it.
+
+### ⚠️ Serialise the rotations
+
+Every rotation is a round trip to the main process, and a resize can land in the middle of a keypress. Overlapping calls each read `rotationAngle` before the other writes it back, and a quarter turn goes missing.
+
+Adding the resize observer was enough to trigger this on its own, because `observe()` fires immediately — the first keypress and that initial callback raced, and three presses landed on 180° instead of 270°. Calls are queued through a promise chain.
 
 ### ⚠️ A sandboxed preload cannot `require` application files
 

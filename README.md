@@ -21,8 +21,8 @@ Grab one of the two files from `dist`:
 
 | File | What it is |
 | --- | --- |
-| `YouTube Desktop Setup 1.1.0.exe` | Installer. Adds Start menu and desktop shortcuts |
-| `YouTube Desktop 1.1.0.exe` | Portable. Just double-click it |
+| `YouTube Desktop Setup 1.1.1.exe` | Installer. Adds Start menu and desktop shortcuts |
+| `YouTube Desktop 1.1.1.exe` | Portable. Just double-click it |
 
 The builds are unsigned, so Windows SmartScreen will warn on first run. Choose **More info → Run anyway**.
 
@@ -58,7 +58,9 @@ The L gesture closes **the window it was drawn in**. Draw it in a popup and only
 
 Press **`R`** to turn the video a quarter turn clockwise. Four presses bring it back upright. Useful for phone footage that was uploaded sideways.
 
-Only the video rotates — the player controls and the page stay where they are — and it is scaled to stay inside the player. The rotation resets when a different video starts, and `R` is ignored while you are typing in the search box.
+Only the video rotates — the player controls and the page stay where they are — and it is resized to fill as much of the player as it can. On a portrait monitor in fullscreen, a landscape video turned on its side fills the height.
+
+The rotation resets when a different video starts, and `R` is ignored while you are typing in the search box.
 
 ## What is blocked
 

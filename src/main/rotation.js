@@ -21,10 +21,18 @@ function nextAngle(current) {
 }
 
 /**
- * How much a rotated box must shrink to stay inside its container.
+ * How much a rotated box must be scaled to fill its container.
  *
  * At 0° and 180° nothing changes. At 90° and 270° the box is effectively
- * `height × width`, so it has to fit the container both ways round.
+ * `height × width`, so it is scaled to the largest size that still fits the
+ * container both ways round.
+ *
+ * **This scales up as well as down**, deliberately. Rotating a landscape video
+ * on a portrait screen leaves it far smaller than the space available — on a
+ * 1080×1920 display a 16:9 video is laid out 1080×607, and once turned on its
+ * side it occupies only 607×1080. Capping the scale at 1 leaves most of a
+ * fullscreen portrait monitor empty, which is exactly the case this feature is
+ * for.
  *
  * @param {number} angle degrees
  * @param {{width: number, height: number}} box the element being rotated
@@ -40,8 +48,7 @@ function fitScale(angle, box, container) {
   const measurements = [w, h, containerWidth, containerHeight];
   if (measurements.some((value) => !Number.isFinite(value) || value <= 0)) return 1;
 
-  // Never scale up: a video that already fits should not be enlarged.
-  return Math.min(containerWidth / h, containerHeight / w, 1);
+  return Math.min(containerWidth / h, containerHeight / w);
 }
 
 /**

@@ -206,6 +206,31 @@ function measure(video) {
  * itself out on navigation — either would drop an inline transform, while a rule
  * keeps applying.
  */
+/** @type {ResizeObserver | null} */
+let playerObserver = null;
+
+/**
+ * Recompute when the player itself changes size.
+ *
+ * Going fullscreen fires `fullscreenchange` before the player has been laid out
+ * at its new size, so recomputing on that event alone reads stale dimensions and
+ * the video ends up scaled for the old box. Watching the element covers
+ * fullscreen, theatre mode and window resizes alike, and always after the fact.
+ *
+ * A transform does not affect layout, so applying one cannot retrigger this.
+ */
+function observePlayer(video) {
+  if (typeof ResizeObserver !== 'function') return;
+  const player = video.closest('#movie_player') ?? video.parentElement;
+  if (!player) return;
+
+  playerObserver?.disconnect();
+  playerObserver = new ResizeObserver(() => {
+    if (rotationAngle) applyRotation(false);
+  });
+  playerObserver.observe(player);
+}
+
 function rotationStyleElement() {
   let style = document.getElementById('ytd-rotation-style');
   if (!style) {
@@ -216,14 +241,32 @@ function rotationStyleElement() {
   return style;
 }
 
-async function applyRotation(advance) {
+/**
+ * One rotation at a time.
+ *
+ * Each call is a round trip to the main process, and a resize can land in the
+ * middle of a keypress. Overlapping calls read `rotationAngle` before the other
+ * has written it back, so a quarter turn goes missing — registering the resize
+ * observer alone was enough to lose one, because observing fires immediately.
+ */
+let rotationQueue = Promise.resolve();
+
+function applyRotation(advance) {
+  rotationQueue = rotationQueue.then(() => rotateNow(advance)).catch(() => {});
+  return rotationQueue;
+}
+
+async function rotateNow(advance) {
   const video = findVideo();
   if (!video) return;
 
-  // A new video means a fresh start; carrying a rotation into the next
-  // autoplayed clip would be baffling.
-  if (rotatedVideo && video !== rotatedVideo) rotationAngle = 0;
-  rotatedVideo = video;
+  if (video !== rotatedVideo) {
+    // A new video means a fresh start; carrying a rotation into the next
+    // autoplayed clip would be baffling.
+    if (rotatedVideo) rotationAngle = 0;
+    rotatedVideo = video;
+    observePlayer(video);
+  }
 
   const { box, container } = measure(video);
   const result = await ipcRenderer.invoke('ytd:rotate', {

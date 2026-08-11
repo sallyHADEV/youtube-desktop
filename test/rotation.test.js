@@ -38,11 +38,36 @@ test('90도로 돌린 가로 영상은 플레이어 안에 들어오도록 줄�
   assert.ok(box.width * scale <= container.height + 0.001);
 });
 
-test('이미 들어맞는 영상을 확대하지는 않는다', () => {
-  // A tall video rotated into a wide player would otherwise be scaled up.
+test('세로 모니터 전체화면에서는 확대해서 화면을 채운다', () => {
+  // 1080×1920 portrait display, 16:9 video laid out 1080×607. Rotated it takes
+  // 607×1080 — capping the scale at 1 would leave most of the screen empty,
+  // which is the bug this feature was reported for.
+  const box = { width: 1080, height: 607 };
+  const container = { width: 1080, height: 1920 };
+  const scale = fitScale(90, box, container);
+
+  assert.ok(scale > 1, `확대되어야 함 (실제 ${scale})`);
+  assert.equal(scale, Math.min(1080 / 607, 1920 / 1080));
+
+  // Never overflows, and fills whichever axis runs out first — here the height.
+  const rotatedWidth = box.height * scale;
+  const rotatedHeight = box.width * scale;
+  assert.ok(rotatedWidth <= container.width + 0.001);
+  assert.ok(rotatedHeight <= container.height + 0.001);
+  assert.ok(
+    rotatedWidth >= container.width - 0.001 || rotatedHeight >= container.height - 0.001,
+    `한 축은 꽉 채워야 함 (${rotatedWidth}x${rotatedHeight} / ${container.width}x${container.height})`,
+  );
+});
+
+test('세로 영상을 가로 플레이어에서 돌리면 플레이어를 채운다', () => {
   const box = { width: 300, height: 900 };
   const container = { width: 1600, height: 900 };
-  assert.equal(fitScale(90, box, container), 1);
+  const scale = fitScale(90, box, container);
+
+  assert.equal(scale, Math.min(1600 / 900, 900 / 300));
+  assert.ok(box.height * scale <= container.width + 0.001);
+  assert.ok(box.width * scale <= container.height + 0.001);
 });
 
 test('측정값이 0이거나 이상하면 배율을 건드리지 않는다', () => {

@@ -1,7 +1,7 @@
 {
   "name": "ytd",
   "productName": "YouTube Desktop",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "YouTube desktop app with a persistent Google session (passkey capable) that is fenced off from every non-YouTube Google service.",
   "main": "src/main/index.js",
   "license": "MIT",

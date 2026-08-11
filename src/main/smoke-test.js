@@ -267,6 +267,26 @@ async function runSmokeTest({ win, guard, identity }) {
     Math.abs(resizedScale - 600 / 800) < 0.01,
     `scale=${resizedScale} (기대값 ${(600 / 800).toFixed(3)}, 800x450 영상 / 800x600 플레이어)`,
   );
+
+  // The reported bug: a landscape video rotated on a portrait screen has room to
+  // grow, and capping the scale at 1 left most of the display empty.
+  await win.webContents.executeJavaScript(`(() => {
+    const box = document.getElementById('movie_player');
+    box.style.width = '400px'; box.style.height = '800px';
+    const video = box.querySelector('video');
+    video.style.width = '400px'; video.style.height = '225px';
+    window.dispatchEvent(new Event('resize'));
+    return true;
+  })()`);
+  await delay(600);
+  const portrait = await readTransform();
+  const portraitScale = Number(/scale\(([\d.]+)\)/.exec(portrait)?.[1]);
+  const expected = Math.min(400 / 225, 800 / 400);
+  record(
+    '세로 화면에서는 확대해 화면을 채움',
+    portraitScale > 1 && Math.abs(portraitScale - expected) < 0.01,
+    `scale=${portraitScale} (기대값 ${expected.toFixed(3)}) → ${Math.round(225 * portraitScale)}x${Math.round(400 * portraitScale)} / 화면 400x800`,
+  );
   win.hide();
 
   // --- popups share the session --------------------------------------------
