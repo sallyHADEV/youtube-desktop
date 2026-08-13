@@ -4,7 +4,7 @@ User-facing docs are in [README.md](README.md). This is about how it works and w
 
 The traps below were mostly walked into for real. They are easy to reintroduce, so they are written down.
 
-> [한국어 문서](DEVELOPMENT.ko.md)
+> [한국어 문서](DEVELOPMENT.ko.md) — for the chronological story of how each feature was built (in Korean), see [HISTORY.md](HISTORY.md)
 
 ## Commands
 

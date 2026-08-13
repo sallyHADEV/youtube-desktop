@@ -2,7 +2,7 @@
 
 사용자용 안내는 [README.ko.md](README.ko.md)에 있습니다. 이 문서는 구조와, 왜 그렇게 만들었는지에 대한 기록입니다.
 
-> [English](DEVELOPMENT.md)
+> [English](DEVELOPMENT.md) — 개발 과정을 시간순으로 정리한 재개용 문서는 [HISTORY.md](HISTORY.md)
 
 여기 적힌 함정들은 대부분 **실제로 밟아본 것**입니다. 되돌리기 쉬운 형태라 표시를 남겨둡니다.
 
