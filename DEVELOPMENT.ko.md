@@ -11,7 +11,8 @@
 | 명령 | 설명 |
 | --- | --- |
 | `npm start` | 앱 실행 |
-| `npm test` | 단위 테스트 (도메인 정책, 신원, 아이콘 포맷) |
+| `npm run music` | YouTube Music 모드로 바로 실행 |
+| `npm test` | 단위 테스트 (도메인 정책, 신원, 아이콘 포맷, 모드 전환) |
 | `npm run smoke` | 앱을 실제로 띄워 로그인·차단·다크모드를 자가 점검 |
 | `npm run probe` | UA 프로파일별 로그인 차단 진단 |
 | `npm run signout` | 세션 초기화 |
@@ -23,20 +24,21 @@ PowerShell에서는 `npm` 대신 `npm.cmd`를 쓰세요 (README 참고).
 ## 구조
 
 ```
+src/main/mode.js              모드 관리 및 URL 매핑 (순수 함수, 테스트 대상)
 src/main/policy.js            도메인 정책 (순수 함수, 테스트 대상)
 src/main/identity.js          URL별 신원 선택 (YouTube=Chrome, 로그인=Electron)
 src/main/ua-profiles.js       Chrome/Edge/Firefox UA·클라이언트 힌트 정의
 src/main/session.js           persist 파티션, 헤더 재작성, 권한
 src/main/navigation-guard.js  3중 차단 + 외부 링크 전달
 src/main/windows-titlebar.js  DWM 타이틀바 색 (koffi FFI)
-src/main/window-state.js      창 위치·크기 저장
-src/main/menu.js              메뉴 (탐색, 로그인, 로그아웃)
+src/main/window-state.js      창 위치·크기 및 시작 모드 설정 저장
+src/main/menu.js              메뉴 (탐색, 모드 선택, 로그인, 로그아웃)
 src/main/gesture.js           마우스 제스처 판정 (순수 함수)
 src/main/rotation.js          영상 회전 기하 (순수 함수)
 src/main/logger.js            이동 경로·차단·서버 응답 기록
 src/main/smoke-test.js        실행 자가 점검
 src/main/login-probe.js       로그인 차단 진단
-src/preload/index.js          userAgentData 패치, 제스처 감지, 패스키 추적(진단용)
+src/preload/index.js          플로팅 모드 스위처 UI, userAgentData 패치, 제스처 감지
 tools/make-icon.js            아이콘 생성 (의존성 없음)
 ```
 

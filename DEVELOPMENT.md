@@ -11,7 +11,8 @@ The traps below were mostly walked into for real. They are easy to reintroduce, 
 | Command | What it does |
 | --- | --- |
 | `npm start` | Run the app |
-| `npm test` | Unit tests (domain policy, identity, gestures, icon format) |
+| `npm run music` | Run the app directly in YouTube Music mode |
+| `npm test` | Unit tests (domain policy, identity, gestures, icon format, mode switching) |
 | `npm run smoke` | Launch the app and self-check sign-in, blocking, gestures, dark mode |
 | `npm run probe` | Diagnose sign-in blocking per UA profile |
 | `npm run signout` | Clear the session |
@@ -23,6 +24,7 @@ On PowerShell use `npm.cmd` rather than `npm` (see README).
 ## Layout
 
 ```
+src/main/mode.js              Mode manager and URL mapping (pure, under test)
 src/main/policy.js            Domain policy (pure functions, under test)
 src/main/identity.js          Which browser to claim to be, per URL
 src/main/ua-profiles.js       Chrome/Edge/Firefox UA and client hints
@@ -31,12 +33,12 @@ src/main/navigation-guard.js  Three-layer blocking + external link handoff
 src/main/windows-titlebar.js  DWM title bar colour (koffi FFI)
 src/main/gesture.js           Mouse gesture recognition (pure)
 src/main/rotation.js          Video rotation geometry (pure)
-src/main/window-state.js      Window position and size
-src/main/menu.js              Menu (navigate, sign in, sign out)
+src/main/window-state.js      Window position, size, and startup mode preferences
+src/main/menu.js              Menu (navigate, mode selection, sign in, sign out)
 src/main/logger.js            Navigation, blocking and server responses
 src/main/smoke-test.js        Runtime self-check
 src/main/login-probe.js       Sign-in blocking diagnosis
-src/preload/index.js          userAgentData patch, gesture capture, passkey tracing
+src/preload/index.js          Floating mode switcher UI, userAgentData patch, gesture capture
 tools/make-icon.js            Icon generation (no dependencies)
 ```
 
