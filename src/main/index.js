@@ -7,6 +7,17 @@ const { app, BrowserWindow, dialog, nativeTheme, ipcMain } = require('electron')
 const { createYouTubeSession, PARTITION } = require('./session');
 const { createNavigationGuard, openExternally } = require('./navigation-guard');
 const { buildMenu, HOME_URL } = require('./menu');
+const {
+  YOUTUBE_URL,
+  MUSIC_URL,
+  MODES,
+  STARTUP_MODES,
+  detectMode,
+  getHomeUrl,
+  getTitleForMode,
+  targetUrlForMode,
+  resolveStartupMode,
+} = require('./mode');
 const { createLogger, safeUrl } = require('./logger');
 const { applyDarkTitleBar } = require('./windows-titlebar');
 const { resolveGesture, THRESHOLD_PX } = require('./gesture');
@@ -38,6 +49,53 @@ const SIGN_IN_IDENTITY =
 let mainWindow = null;
 /** @type {ReturnType<typeof import('./identity').createIdentity> | null} */
 let identity = null;
+/** Current active mode: 'youtube' or 'music' */
+let currentMode = resolveStartupMode(process.argv, windowState.read());
+
+function switchMode(targetMode) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (targetMode !== MODES.YOUTUBE && targetMode !== MODES.MUSIC) return;
+
+  const currentUrl = mainWindow.webContents.getURL();
+  const nextUrl = targetUrlForMode(targetMode, currentUrl);
+  currentMode = targetMode;
+  windowState.updateSettings({ lastMode: targetMode });
+  mainWindow.setTitle(getTitleForMode(targetMode));
+  refreshMenu();
+
+  mainWindow.webContents.send('ytd:mode-updated', {
+    mode: targetMode,
+    title: getTitleForMode(targetMode),
+  });
+
+  mainWindow.loadURL(nextUrl).catch((error) => {
+    if (!/ERR_ABORTED/.test(String(error))) console.error('mode load failed:', error);
+  });
+}
+
+function toggleMode() {
+  switchMode(currentMode === MODES.MUSIC ? MODES.YOUTUBE : MODES.MUSIC);
+}
+
+function setStartupMode(startupPreference) {
+  windowState.updateSettings({ startupMode: startupPreference });
+  refreshMenu();
+}
+
+function refreshMenu() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const settings = windowState.read();
+  buildMenu(mainWindow, {
+    getMode: () => currentMode,
+    getStartupMode: () => settings.startupMode ?? STARTUP_MODES.YOUTUBE,
+    onSwitchMode: (mode) => switchMode(mode),
+    onToggleMode: () => toggleMode(),
+    onSetStartupMode: (pref) => setStartupMode(pref),
+    onToggleSwitcher: () => {
+      mainWindow?.webContents.send('ytd:toggle-switcher');
+    },
+  });
+}
 
 if (!HEADLESS && !app.requestSingleInstanceLock()) {
   // Say why. Exiting silently here is indistinguishable from failing to start,
@@ -95,10 +153,50 @@ function start() {
     else if (command === 'forward' && history.canGoForward()) history.goForward();
   });
 
+  // Mode management IPC channels
+  ipcMain.handle('ytd:get-mode', () => {
+    const settings = windowState.read();
+    return {
+      mode: currentMode,
+      startupMode: settings.startupMode ?? STARTUP_MODES.YOUTUBE,
+      title: getTitleForMode(currentMode),
+    };
+  });
+
+  ipcMain.handle('ytd:switch-mode', (_event, request) => {
+    const target = request?.target;
+    if (target === MODES.MUSIC || target === MODES.YOUTUBE) {
+      switchMode(target);
+    }
+    return { mode: currentMode };
+  });
+
+  ipcMain.handle('ytd:toggle-mode', () => {
+    toggleMode();
+    return { mode: currentMode };
+  });
+
+  ipcMain.handle('ytd:set-startup-mode', (_event, request) => {
+    if (request?.startupMode) {
+      setStartupMode(request.startupMode);
+    }
+    return { startupMode: windowState.read().startupMode };
+  });
+
   // Every webContents, including popups opened by the sign-in flow.
   app.on('web-contents-created', (_event, contents) => {
     guard.attach(contents);
     traceNavigation(contents, (text) => log(text));
+
+    // YouTube Music (and media players in general) registers beforeunload handlers
+    // during playback to warn about abandoning active queues. In Electron, this
+    // cancels page unload by default, freezing mode-switching and window-close (X button).
+    // Calling event.preventDefault() instructs Electron to ignore the cancellation
+    // and proceed with unload/close.
+    contents.on('will-prevent-unload', (event) => {
+      log('will-prevent-unload intercepted -> allowing unload and close');
+      event.preventDefault();
+    });
   });
 
   app.whenReady().then(async () => {
@@ -139,7 +237,24 @@ function start() {
     if (TRACE) installNetworkTrace(ytSession, (text) => log(text));
 
     mainWindow = createWindow();
-    buildMenu(mainWindow);
+    refreshMenu();
+
+    const syncModeOnNavigation = (url) => {
+      if (!url || !url.startsWith('http')) return;
+      const detected = detectMode(url);
+      if (detected !== currentMode) {
+        currentMode = detected;
+        windowState.updateSettings({ lastMode: detected });
+        mainWindow?.setTitle(getTitleForMode(detected));
+        refreshMenu();
+        mainWindow?.webContents.send('ytd:mode-updated', {
+          mode: detected,
+          title: getTitleForMode(detected),
+        });
+      }
+    };
+    mainWindow.webContents.on('did-navigate', (_event, url) => syncModeOnNavigation(url));
+    mainWindow.webContents.on('did-navigate-in-page', (_event, url) => syncModeOnNavigation(url));
 
     if (SMOKE_TEST) {
       const { runSmokeTest } = require('./smoke-test');
@@ -148,10 +263,21 @@ function start() {
       return;
     }
 
-    mainWindow.once('ready-to-show', () => mainWindow?.show());
+    mainWindow.once('ready-to-show', () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }, 1200);
+
     // YouTube reloads itself with `?themeRefresh=1` on a cold profile, which
     // aborts the original navigation; that rejection is expected, not an error.
-    mainWindow.loadURL(HOME_URL).catch((error) => {
+    const initialUrl = getHomeUrl(currentMode);
+    mainWindow.loadURL(initialUrl).catch((error) => {
       if (!/ERR_ABORTED/.test(String(error))) console.error('load failed:', error);
       mainWindow?.show();
     });
@@ -306,6 +432,7 @@ function sharedWebPreferences() {
     additionalArguments: [
       `--ua-profile=${identity?.profileId ?? 'chrome'}`,
       `--gesture-threshold=${THRESHOLD_PX}`,
+      `--initial-mode=${currentMode}`,
       ...(TRACE ? ['--trace-webauthn'] : []),
     ],
     contextIsolation: true,
@@ -339,7 +466,7 @@ function createWindow() {
     show: false,
     backgroundColor: BACKGROUND_COLOR,
     autoHideMenuBar: false,
-    title: 'YouTube',
+    title: getTitleForMode(currentMode),
     // Packaged builds take the icon from the executable; this is what gives the
     // window and taskbar the right icon during `npm start`.
     icon: APP_ICON,

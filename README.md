@@ -62,6 +62,31 @@ Only the video rotates — the player controls and the page stay where they are 
 
 The rotation resets when a different video starts, and `R` is ignored while you are typing in the search box.
 
+## YouTube & YouTube Music Mode Switching
+
+Freely toggle between standard **YouTube** and **YouTube Music** without signing in twice — they share the persistent Google session.
+
+- **Sleek Pulldown Switcher UI**:
+  - A subtle, minimal tab peeks out at the top-left (near the YouTube logo).
+  - Hovering drops down a glassmorphic pill switcher with a smooth, bouncy spring animation.
+  - Calibrated with a generous hysteresis delay (750ms) to prevent mouse jitter and unintentional collapse.
+  - Smooth animated indicator pill glides between YouTube and Music tabs on click.
+  - **Distraction-Free**: Automatically hides during fullscreen.
+- **Keyboard Shortcuts & HUD Notification**:
+  - `Ctrl+1`: Switch to YouTube
+  - `Ctrl+2`: Switch to YouTube Music
+  - `Ctrl+M`: Quick toggle between YouTube ⟷ YouTube Music
+  - `Ctrl+Shift+M`: Show/hide the switcher widget
+  - Triggers a stylish HUD toast notification at the top of the screen.
+- **Smart URL Continuity**:
+  - Switching modes while watching a video (`watch?v=...`) preserves the video ID and playlist, so you can seamlessly continue listening or watching across services.
+- **Direct YouTube Music Launch (Startup Option)**:
+  - CLI: `electron . --music` or `npm run music`
+  - Menu Bar → **모드 (Mode) → 시작 모드 (Startup Mode)**:
+    - `항상 YouTube로 시작` (Always YouTube - default)
+    - `항상 YouTube Music으로 시작` (Always YouTube Music)
+    - `마지막 사용 모드로 시작` (Remember last used mode)
+
 ## What is blocked
 
 | | |

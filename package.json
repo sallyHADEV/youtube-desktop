@@ -8,6 +8,8 @@
   "author": "YTD",
   "scripts": {
     "start": "electron .",
+    "music": "electron . --music",
+    "start:music": "electron . --music",
     "smoke": "electron . --smoke-test",
     "probe": "electron . --login-probe",
     "signout": "electron . --reset-session",
