@@ -418,6 +418,172 @@ addEventListener(
   true,
 );
 
+// --------------------------------------------------- vertical video fill ---
+
+/**
+ * A portrait video sits in a 16:9 player as a narrow strip. For those videos a
+ * button appears next to the fullscreen button that lets the player take over
+ * the whole window, so the video uses the window's full height without going
+ * fullscreen. Esc, the button again, or leaving the video restores the page.
+ *
+ * The video element is sized by stylesheet rules with `object-fit: contain`
+ * rather than by the player. The player recalculates its own inline sizes
+ * whenever it likes, and a rule outranking them keeps the video fitted.
+ */
+const FILL_CLASS = 'ytd-fill-window';
+const FILL_BUTTON_CLASS = 'ytd-fill-button';
+
+function fillStyleElement() {
+  let style = document.getElementById('ytd-fill-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'ytd-fill-style';
+    style.textContent = `
+      html.${FILL_CLASS}, html.${FILL_CLASS} body { overflow: hidden !important; }
+      html.${FILL_CLASS} #masthead-container { visibility: hidden !important; }
+      html.${FILL_CLASS} #movie_player {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 2147483000 !important;
+        background: #000 !important;
+      }
+      html.${FILL_CLASS} #movie_player .html5-video-container {
+        width: 100% !important;
+        height: 100% !important;
+      }
+      html.${FILL_CLASS} #movie_player video.html5-main-video {
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+      }
+      .${FILL_BUTTON_CLASS} svg { pointer-events: none; }
+    `;
+    (document.head ?? document.documentElement).appendChild(style);
+  }
+  return style;
+}
+
+const isFilled = () => document.documentElement.classList.contains(FILL_CLASS);
+
+function isVerticalVideo(video) {
+  return !!video && video.videoWidth > 0 && video.videoHeight > video.videoWidth;
+}
+
+/** Let the player lay its controls out again for the new size. */
+function relayoutPlayer() {
+  requestAnimationFrame(() => dispatchEvent(new Event('resize')));
+}
+
+function setFilled(on) {
+  if (on === isFilled()) return;
+  fillStyleElement();
+  document.documentElement.classList.toggle(FILL_CLASS, on);
+  updateFillButton();
+  relayoutPlayer();
+}
+
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
+/**
+ * Bars at the top and bottom with arrows reaching for them: "stretch to the
+ * window's height". Drawn on a 24px grid and offset when the player's own
+ * icons use the older 36px one, so it matches the fullscreen icon beside it.
+ */
+function createFillIcon(reference) {
+  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  const viewBox = reference?.getAttribute('viewBox') || '0 0 24 24';
+  svg.setAttribute('viewBox', viewBox);
+  svg.setAttribute('width', reference?.getAttribute('width') || '100%');
+  svg.setAttribute('height', reference?.getAttribute('height') || '100%');
+  svg.setAttribute('fill', 'none');
+
+  const group = document.createElementNS(SVG_NAMESPACE, 'g');
+  const size = Number(viewBox.split(/\s+/)[2]) || 24;
+  if (size !== 24) group.setAttribute('transform', `translate(${(size - 24) / 2} ${(size - 24) / 2})`);
+  group.setAttribute('stroke', '#fff');
+  group.setAttribute('stroke-width', '2');
+  group.setAttribute('stroke-linecap', 'round');
+  group.setAttribute('stroke-linejoin', 'round');
+  for (const d of ['M5 3h14', 'M5 21h14', 'M12 7v10', 'M9 10l3-3 3 3', 'M9 14l3 3 3-3']) {
+    const path = document.createElementNS(SVG_NAMESPACE, 'path');
+    path.setAttribute('d', d);
+    group.appendChild(path);
+  }
+  svg.appendChild(group);
+  return svg;
+}
+
+function updateFillButton() {
+  const button = document.querySelector(`#movie_player .${FILL_BUTTON_CLASS}`);
+  if (!button) return;
+  const label = isFilled() ? '창 채우기 해제 (Esc)' : '창 높이에 맞춰 보기';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-pressed', String(isFilled()));
+}
+
+/**
+ * Put the button in place, show it only for portrait videos, and undo the fill
+ * when the video it was for is gone. Cheap enough to run on every check.
+ */
+function syncFillButton() {
+  if (window.top !== window.self) return;
+  const player = document.querySelector('#movie_player');
+  const fullscreenButton = player?.querySelector('.ytp-right-controls .ytp-fullscreen-button');
+  const video = findVideo();
+  const vertical = isVerticalVideo(video) && location.pathname === '/watch';
+
+  if (!vertical && isFilled()) setFilled(false);
+  if (!fullscreenButton) return;
+
+  let button = player.querySelector(`.${FILL_BUTTON_CLASS}`);
+  if (!button) {
+    button = document.createElement('button');
+    button.className = `ytp-button ${FILL_BUTTON_CLASS}`;
+    button.appendChild(createFillIcon(fullscreenButton.querySelector('svg')));
+    button.addEventListener('click', (event) => {
+      if (!isRealInput(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setFilled(!isFilled());
+    });
+  }
+  if (button.nextElementSibling !== fullscreenButton) {
+    fullscreenButton.parentElement.insertBefore(button, fullscreenButton);
+  }
+  button.style.display = vertical ? '' : 'none';
+  updateFillButton();
+}
+
+if (window.top === window.self && /(^|\.)youtube\.com$/.test(location.hostname) && location.hostname !== 'music.youtube.com') {
+  // Media events do not bubble, but they do pass through the capture phase.
+  document.addEventListener('loadedmetadata', syncFillButton, true);
+  addEventListener('yt-navigate-finish', syncFillButton);
+  addEventListener('yt-navigate-start', () => setFilled(false));
+  // The controls are rebuilt now and then; a slow poll puts the button back.
+  setInterval(syncFillButton, 1500);
+
+  addEventListener(
+    'keydown',
+    (event) => {
+      if (!isRealInput(event) || event.key !== 'Escape' || !isFilled()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setFilled(false);
+    },
+    true,
+  );
+
+  // Fullscreen takes over anyway; leaving the fill on would only surprise on exit.
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) setFilled(false);
+  });
+}
+
 // ---------------------------------------------------- mode switcher UI ---
 
 /**
@@ -1007,19 +1173,26 @@ function setupModeSwitcher() {
     }
   });
 
-  // Align above YouTube / YouTube Music logo
+  /*
+   * Align above the YouTube / YouTube Music logo, but never past the window's
+   * left edge. The expanded pill is wider than the 220px hit zone it is centred
+   * in, so centring on the logo alone pushed its left end out of the window.
+   */
+  const HOST_WIDTH = 220;
+  const EDGE_MARGIN = 16;
+  /** Fallback for when the pill cannot be measured yet (hidden, not mounted). */
+  const PILL_WIDTH_FALLBACK = 260;
+
   function alignWithLogo() {
+    let centre = 72 + HOST_WIDTH / 2;
     const logo = document.querySelector('ytmusic-logo, ytd-topbar-logo-renderer#logo, a#logo, #logo');
     if (logo) {
       const rect = logo.getBoundingClientRect();
-      if (rect.left > 10 && rect.left < 260) {
-        const logoCenter = rect.left + rect.width / 2;
-        const hostLeft = Math.max(16, Math.round(logoCenter - 110));
-        hostEl.style.left = `${hostLeft}px`;
-        return;
-      }
+      if (rect.left > 10 && rect.left < 260) centre = rect.left + rect.width / 2;
     }
-    hostEl.style.left = '72px';
+    const pillWidth = container.offsetWidth || PILL_WIDTH_FALLBACK;
+    centre = Math.max(centre, pillWidth / 2 + EDGE_MARGIN);
+    hostEl.style.left = `${Math.round(centre - HOST_WIDTH / 2)}px`;
   }
 
   // Fullscreen handling
@@ -1057,6 +1230,7 @@ function setupModeSwitcher() {
     isHidden = !isHidden;
     hostEl.classList.toggle('hidden', isHidden);
     localStorage.setItem('ytd:switcher-hidden', String(isHidden));
+    if (!isHidden) requestAnimationFrame(alignWithLogo);
   };
   ipcRenderer.on('ytd:toggle-switcher', toggleVisibility);
 
@@ -1089,7 +1263,10 @@ function setupModeSwitcher() {
     if (!document.documentElement.contains(host)) {
       document.documentElement.appendChild(host);
       alignWithLogo();
-      requestAnimationFrame(() => updateIndicator(currentMode));
+      requestAnimationFrame(() => {
+        updateIndicator(currentMode);
+        alignWithLogo(); // the pill has a measurable width only once laid out
+      });
     }
   };
 
