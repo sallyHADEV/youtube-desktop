@@ -432,6 +432,7 @@ addEventListener(
  */
 const FILL_CLASS = 'ytd-fill-window';
 const FILL_BUTTON_CLASS = 'ytd-fill-button';
+const FILL_HIDDEN_CLASS = 'ytd-fill-hidden';
 
 function fillStyleElement() {
   let style = document.getElementById('ytd-fill-style');
@@ -441,6 +442,7 @@ function fillStyleElement() {
     style.textContent = `
       html.${FILL_CLASS}, html.${FILL_CLASS} body { overflow: hidden !important; }
       html.${FILL_CLASS} #masthead-container { visibility: hidden !important; }
+      html.${FILL_CLASS} .${FILL_HIDDEN_CLASS} { visibility: hidden !important; }
       html.${FILL_CLASS} #movie_player {
         position: fixed !important;
         inset: 0 !important;
@@ -478,10 +480,40 @@ function relayoutPlayer() {
   requestAnimationFrame(() => dispatchEvent(new Event('resize')));
 }
 
+/**
+ * Hide everything that is not on the player's own branch of the page.
+ *
+ * Raising the player's z-index is not enough: an ancestor of the player forms
+ * its own stacking context, so the related videos, the playlist panel and the
+ * title below the player still painted on top of it. Hiding the siblings of
+ * each ancestor clears the window without depending on how YouTube stacks it.
+ * Re-run while filled, because YouTube keeps adding content (comments, more
+ * recommendations) as it loads.
+ */
+function hideAroundPlayer() {
+  const player = document.querySelector('#movie_player');
+  if (!player) return;
+  for (let node = player; node && node !== document.body && node.parentElement; node = node.parentElement) {
+    for (const sibling of node.parentElement.children) {
+      if (sibling === node || ['STYLE', 'SCRIPT', 'LINK'].includes(sibling.tagName)) continue;
+      if (sibling.id === 'ytd-mode-switcher-host') continue;
+      sibling.classList.add(FILL_HIDDEN_CLASS);
+    }
+  }
+}
+
+function showAroundPlayer() {
+  for (const element of document.querySelectorAll(`.${FILL_HIDDEN_CLASS}`)) {
+    element.classList.remove(FILL_HIDDEN_CLASS);
+  }
+}
+
 function setFilled(on) {
   if (on === isFilled()) return;
   fillStyleElement();
   document.documentElement.classList.toggle(FILL_CLASS, on);
+  if (on) hideAroundPlayer();
+  else showAroundPlayer();
   updateFillButton();
   relayoutPlayer();
 }
@@ -538,6 +570,7 @@ function syncFillButton() {
   const vertical = isVerticalVideo(video) && location.pathname === '/watch';
 
   if (!vertical && isFilled()) setFilled(false);
+  if (isFilled()) hideAroundPlayer();
   if (!fullscreenButton) return;
 
   let button = player.querySelector(`.${FILL_BUTTON_CLASS}`);
