@@ -19,8 +19,8 @@ YouTube 전용 데스크톱 앱입니다. Google 계정으로 로그인해 구�
 
 | 파일 | 설명 |
 | --- | --- |
-| `YouTube Desktop Setup 1.1.1.exe` | 설치본. 시작 메뉴·바탕화면 바로가기가 생깁니다 |
-| `YouTube Desktop 1.1.1.exe` | 포터블. 설치 없이 더블클릭만 하면 됩니다 |
+| `YouTube Desktop Setup 1.2.0.exe` | 설치본. 시작 메뉴·바탕화면 바로가기가 생깁니다 |
+| `YouTube Desktop 1.2.0.exe` | 포터블. 설치 없이 더블클릭만 하면 됩니다 |
 
 코드 서명이 없어서 처음 실행할 때 Windows SmartScreen 경고가 뜹니다. **추가 정보 → 실행**으로 넘어가면 됩니다.
 

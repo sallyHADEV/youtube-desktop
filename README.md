@@ -21,8 +21,8 @@ Grab one of the two files from `dist`:
 
 | File | What it is |
 | --- | --- |
-| `YouTube Desktop Setup 1.1.1.exe` | Installer. Adds Start menu and desktop shortcuts |
-| `YouTube Desktop 1.1.1.exe` | Portable. Just double-click it |
+| `YouTube Desktop Setup 1.2.0.exe` | Installer. Adds Start menu and desktop shortcuts |
+| `YouTube Desktop 1.2.0.exe` | Portable. Just double-click it |
 
 The builds are unsigned, so Windows SmartScreen will warn on first run. Choose **More info → Run anyway**.
 
